@@ -1,9 +1,15 @@
-import express from 'express';
+import express from "express";
+import { signup, login, logout } from "../controllers/auth.controller.js";
 
 const router = express.Router();
 
-router.get('/login', (req, res) => {
-    res.send("Login Route");
-});
+// מרשמים משתמש חדש
+router.post("/signup", signup);
 
-export default router
+// התחברות עם אימייל/סיסמה
+router.post("/login", login);
+
+// התנתקות (ניקוי טוקן/סשן)
+router.post("/logout", logout);
+
+export default router;
