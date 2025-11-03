@@ -4,17 +4,20 @@ import express from "express";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
 
-const app = express();
-
 dotenv.config();
+
+const app = express();
 const PORT = process.env.PORT || 5000;
+
+// כדי ש-body יעבוד ב-POST /login
+app.use(express.json());
 
 // ראוט בדיקה ראשי
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// מחברים את כל הראוטים של auth תחת /api/auth
+// פה אנחנו מחברים את כל הראוטים של auth תחת /api/auth
 app.use("/api/auth", authRoutes);
 
 // מדליקים את השרת
