@@ -1,50 +1,87 @@
-// backend/controllers/auth.controller.js
+import bcrypt from "bcryptjs";
+import User from "../models/user.model.js";
+import generateTokenAndSetCookie from "../utils/generateToken.js";
+
 
 export const signup = async (req, res) => {
   try {
-    const { fullName, username, password, confirmPassword, gender } = req.body;
+    const { fullName, username, email, password, confirmPassword, gender } = req.body; // ← הוספתי email
 
-    console.log("Signup request received:", {
+    if (!fullName || !username || !email || !password || !confirmPassword || !gender) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "Passwords don't match" });
+    }
+
+    // בדיקה כפולה: שם משתמש או אימייל כבר בשימוש
+    const existing = await User.findOne({ $or: [{ username }, { email }] });
+    if (existing) {
+      const field = existing.username === username ? "username" : "email";
+      return res.status(400).json({ error: `This ${field} is already in use` });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, await bcrypt.genSalt(10));
+
+    const boyProfilePic  = `https://avatar.iran.liara.run/public/boy?username=${username}`;
+    const girlProfilePic = `https://avatar.iran.liara.run/public/girl?username=${username}`;
+
+    const newUser = await User.create({
       fullName,
       username,
+      email, // ← לשמור במסד
+      password: hashedPassword,
       gender,
+      profilePic: gender === "male" ? boyProfilePic : girlProfilePic,
     });
 
-    // כאן בעתיד תוסיף ולידציות, שמירת משתמש, הצפנת סיסמה וכו'
-    // לדוגמה:
-    // if (password !== confirmPassword) {
-    //   return res.status(400).json({ error: "Passwords do not match" });
-    // }
-
-    res.json({
-      route: "signup",
-      status: "ok",
-      message: "Signup controller reached",
+    generateTokenAndSetCookie(newUser._id, res);
+    return res.status(201).json({
+      _id: newUser._id,
+      fullName: newUser.fullName,
+      username: newUser.username,
+      profilePic: newUser.profilePic,
     });
-  } catch (error) {
-    console.error("Signup error:", error.message);
-    res.status(500).json({ error: "Internal server error" });
+  } catch (err) {
+    // טיפול בשגיאת מפתח כפול (unique index)
+    if (err?.code === 11000) {
+      const key = Object.keys(err.keyPattern || {})[0] || "field";
+      return res.status(400).json({ error: `Duplicate ${key}` });
+    }
+    console.log("Error in signup controller:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 };
+export const login = async (req, res) => {
+	try {
+		const { username, password } = req.body;
+		const user = await User.findOne({ username });
+		const isPasswordCorrect = await bcrypt.compare(password, user?.password || "");
 
-export const login = (req, res) => {
-  console.log("Login request received");
+		if (!user || !isPasswordCorrect) {
+			return res.status(400).json({ error: "Invalid username or password" });
+		}
 
-  // בעתיד: לבדוק username/password, להחזיר token
-  res.json({
-    route: "login",
-    status: "ok",
-    message: "Login controller reached",
-  });
+		generateTokenAndSetCookie(user._id, res);
+
+		res.status(200).json({
+			_id: user._id,
+			fullName: user.fullName,
+			username: user.username,
+			profilePic: user.profilePic,
+		});
+	} catch (error) {
+		console.log("Error in login controller", error.message);
+		res.status(500).json({ error: "Internal Server Error" });
+	}
 };
 
 export const logout = (req, res) => {
-  console.log("Logout request received");
-
-  // בעתיד: למחוק קובץ cookie של ה-token / session
-  res.json({
-    route: "logout",
-    status: "ok",
-    message: "Logout controller reached",
-  });
+	try {
+		res.cookie("jwt", "", { maxAge: 0 });
+		res.status(200).json({ message: "Logged out successfully" });
+	} catch (error) {
+		console.log("Error in logout controller", error.message);
+		res.status(500).json({ error: "Internal Server Error" });
+	}
 };
